@@ -3,9 +3,25 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from django.db.models import Count
 
-class TagQuerySer(models.QuerySet):
+
+class TagQuerySet(models.QuerySet):
     def popular(self):
         return self.annotate(posts_count=Count('posts')).order_by('-posts_count')
+
+
+class PostsQuerySet(models.QuerySet):
+    def popular(self):
+        return self.annotate(likes_count=Count('likes')).order_by('-likes_count')
+
+    def fetch_with_comments_count(self):
+        post_ids = [post.id for post in self]
+        comments_counts = dict(Post.objects.filter(id__in=post_ids).annotate(comments_count=Count('comments')).values_list('id', 'comments_count'))
+
+        posts_list = list(self)
+        for post in posts_list:
+            post.comments_count = comments_counts.get(post.id, 0)
+
+        return posts_list
 
 
 class Post(models.Model):
@@ -29,6 +45,7 @@ class Post(models.Model):
         'Tag',
         related_name='posts',
         verbose_name='Теги')
+    objects = PostsQuerySet.as_manager()
 
     def __str__(self):
         return self.title
@@ -44,7 +61,7 @@ class Post(models.Model):
 
 class Tag(models.Model):
     title = models.CharField('Тег', max_length=20, unique=True)
-    objects = TagQuerySer.as_manager()
+    objects = TagQuerySet.as_manager()
 
     def __str__(self):
         return self.title
